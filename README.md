@@ -1,2 +1,2 @@
-# Stenos
-Curses Steno Trainer in Python
+# Stenos (WIP)
+A Curses Steno Trainer in Python.

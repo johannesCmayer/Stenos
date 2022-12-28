@@ -1,0 +1,3 @@
+[submodule "typey-type-data"]
+	path = typey-type-data
+	url = git@github.com:didoesdigital/typey-type-data.git

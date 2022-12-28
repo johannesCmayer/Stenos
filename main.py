@@ -1,3 +1,4 @@
+import math
 import json
 import subprocess
 import curses
@@ -10,6 +11,17 @@ import re
 import random
 from collections import namedtuple, OrderedDict
 import logging
+import argparse
+import time
+import signal
+#from kivy.app import App
+#nterestfrom kivy.uix.widget import Widget
+
+parser = argparse.ArgumentParser(
+                    prog = 'stenos',
+                    description = 'A simple steno trainer inspired by keybr.com')
+
+args = parser.parse_args()
 
 project_dir = os.path.abspath(os.path.dirname(__file__))
 
@@ -58,7 +70,7 @@ steno_order = "#STKPWHRAO*EUFRPBLGTSD"
 plover_config_dir = Path("/home/johannes/.local/share/plover")
 dictionary_path = Path(f"{plover_config_dir}/main.json")
 canonical_strokes_path = Path(f"{project_dir}/canonical_strokes.txt")
-word_frequencies_path = Path(f"{project_dir}/word-frequencies.txt")
+word_frequencies_path = Path(f"{project_dir}/lessons/word-frequencies.txt")
 state_path = Path(f"{project_dir}/state.json")
 history_path = Path(f"{project_dir}/history.json")
                          
@@ -102,7 +114,9 @@ with open(word_frequencies_path, "r") as f:
     
 with open(state_path, "r") as f:
     state = json.load(f)
-    
+if "words_idx" not in state:
+    state["words_idx"] = 6
+
 with open(history_path, "r") as f:
     history = json.load(f)
 
@@ -117,7 +131,8 @@ def clear_line(scr, n):
     
 def get_new_words(prev_word=None):
     words = []
-    target_words = all_words_idx[:4]
+    target_words = all_words_idx[:state["words_idx"]-1] + \
+        math.floor(state["words_idx"] / 2) * [all_words_idx[state["words_idx"]-1]]
     assert len(target_words) > 1
     while True:
         new_word = random.choice(target_words)
@@ -144,6 +159,9 @@ def main(stdscr):
     word_rows = [words, get_new_words(words[-1])]
     l = ""
     display_stroke = True
+    wpm = None
+    cpm = None
+    start_time = time.time()
     while True:
         # Draw target words
         pos = (1, 0)
@@ -180,6 +198,14 @@ def main(stdscr):
             stdscr.move(pos[0], pos[1])
             stdscr.addstr(steno_layout, curses.A_DIM)
         
+        # Draw Stats
+        pos = (10, 0)
+        clear_line(stdscr, pos[0])
+        stdscr.move(pos[0], pos[1])
+        str_wpm = (str(math.floor(wpm)) if wpm else "-")
+        str_cpm = (str(math.floor(cpm)) if wpm else "-")
+        stdscr.addstr(f"WPM: {str_wpm}, CPM: {str_cpm}, words_idx: {state['words_idx']}, time: {time.time() - start_time:.1f}")
+        
         # Draw input
         pos = (0, 0)
         clear_line(stdscr, pos[0])
@@ -189,6 +215,8 @@ def main(stdscr):
         stdscr.refresh()
         
         k = stdscr.getch()
+        if  l == "":
+            start_time = time.time()
         if k == curses.KEY_BACKSPACE:
             l = l[:-1]
         elif k == curses.KEY_CTRL_S:
@@ -198,11 +226,38 @@ def main(stdscr):
             if l == " ":
                 l = ""
         
+        # trigger if all words in the line are entered
         if l == " ".join([x.word for x in words]).strip():
             word_rows.pop(0)
             word_rows.append(get_new_words())
             words = word_rows[0]
             l = ""
+            duration = time.time() - start_time
+            cpm = len(" ".join([x.word for x in words]).strip()) / duration * 60
+            wpm = cpm / 5
+            if wpm > 80:
+                state["words_idx"] += 1
+            if wpm < 30:
+                state["words_idx"] -= 1
+            start_time = time.time()
             
 logging.info("starting curses") 
+def exit_hook(sig, frame):
+    with open(state_path, "w") as f:
+        json.dump(state, f)
+    exit(0)
+
+signal.signal(signal.SIGINT, exit_hook)
 wrapper(main)
+
+
+    
+# class StenosUI(Widget):
+#     pass
+
+# class StenosApp(App):
+#     def build(self):
+#         return StenosUI()
+ 
+# if __name__ == "__main__":
+#     StenosApp().run()

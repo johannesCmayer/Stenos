@@ -17,6 +17,9 @@ import signal
 #from kivy.app import App
 #nterestfrom kivy.uix.widget import Widget
 
+REMOVE_CURRENT_WORD_WPM = 80
+ADD_NEW_WORD_WPM = 30
+
 parser = argparse.ArgumentParser(
                     prog = 'stenos',
                     description = 'A simple steno trainer inspired by keybr.com')
@@ -235,10 +238,10 @@ def main(stdscr):
             duration = time.time() - start_time
             cpm = len(" ".join([x.word for x in words]).strip()) / duration * 60
             wpm = cpm / 5
-            if wpm > 80:
-                state["words_idx"] += 1
-            if wpm < 30:
-                state["words_idx"] -= 1
+            if wpm > ADD_NEW_WORD_WPM:
+                state["words_idx"] = min(len(all_words) - 1, state["words_idx"] + 1)
+            if wpm < REMOVE_CURRENT_WORD_WPM:
+                state["words_idx"] = max(3, state["words_idx"] - 1)
             start_time = time.time()
             
 logging.info("starting curses") 
